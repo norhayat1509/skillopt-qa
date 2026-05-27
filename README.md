@@ -1,78 +1,75 @@
 # skillopt-qa
 
-A minimal, faithful re-implementation of **[Microsoft SkillOpt](https://github.com/microsoft/SkillOpt)**
-for the **HotpotQA** multi-hop question-answering task.
+[Microsoft SkillOpt](https://github.com/microsoft/SkillOpt) 的精簡、忠實重現版,
+針對 **HotpotQA** 多跳推理問答任務。
 
-SkillOpt is a *text-space optimizer*: instead of fine-tuning model weights, it
-trains a reusable natural-language **skill** (a `best_skill.md` file) for a
-**frozen** LLM agent. Skill learning is run like model training — epochs,
-mini-batches, and a **validation gate** that only accepts an edit if held-out
-accuracy improves. The single deployable artifact at the end is `best_skill.md`,
-which transfers across models and harnesses.
+SkillOpt 是一種「**文字空間優化器**」:它不去微調模型權重,而是為一個**凍結的
+LLM agent** 訓練出一份可重複使用的自然語言「**技能**」(`best_skill.md`)。
+整個技能學習流程仿照神經網路訓練——有 epoch、mini-batch,以及一道
+**驗證閘門(validation gate)**:只有當保留集(held-out)準確率提升時,才接受該次
+編輯。訓練結束後唯一保留的產物就是 `best_skill.md`,它可跨模型、跨執行環境部署。
 
-> Paper: *SkillOpt: Executive Strategy for Self-Evolving Agent Skills*
-> ([arXiv:2605.23904](https://arxiv.org/abs/2605.23904)).
-> This repo is an independent, simplified educational implementation, not the
-> official code.
+> 論文:《SkillOpt: Executive Strategy for Self-Evolving Agent Skills》
+> ([arXiv:2605.23904](https://arxiv.org/abs/2605.23904))。
+> 本 repo 是獨立、簡化的教學用實作,**並非**官方程式碼。
 
-## How it works
+## 運作原理
 
 ```
-seed skill ──► [roll out agent on a train batch] ──► trajectories (right/wrong)
+種子技能 ──► [讓 agent 帶著技能跑一個 train batch] ──► 軌跡(答對/答錯)
                           │
                           ▼
-              [optimizer LLM proposes a bounded edit]
+              [optimizer LLM 提出一次「有界」編輯]
                           │
                           ▼
-              [evaluate candidate on validation set]
+              [在驗證集上評估候選技能]
                           │
-              improved? ──�yes──► accept, becomes new best skill
+              有進步? ──是──► 接受,成為新的最佳技能
                           │
-                          └─no──► reject, feed back to optimizer (don't repeat)
+                          └─否──► 拒絕,並回饋給 optimizer(別再提同樣的)
 ```
 
-The optimizer follows the paper's stabilizers: *enough evidence* (show
-successes and failures), *bounded textual updates* (small targeted edits),
-*rejected-edit feedback* (memory of rejected versions), and *slow update*
-(one validation-gated edit per step).
+optimizer 實作了論文中的穩定機制:**足夠證據**(同時呈現成功與失敗案例)、
+**有界文字更新**(小而精準的編輯,非整篇重寫)、**拒絕編輯記憶**
+(記住被拒絕過的版本)、以及**慢更新**(每步只做一次、且須通過驗證閘門的編輯)。
 
-## Requirements
+## 環境需求
 
-- Python ≥ 3.10, [`uv`](https://docs.astral.sh/uv/)
-- An **OpenAI-compatible** chat endpoint. Nothing GPU-specific is installed by
-  this repo — point `model.base_url` at any endpoint.
+- Python ≥ 3.10、[`uv`](https://docs.astral.sh/uv/)
+- 一個 **OpenAI 相容**的 chat endpoint。本 repo 不安裝任何 GPU 相關套件——把
+  `model.base_url` 指向任何 endpoint 即可。
 
-The shipped `configs/hotpotqa/default.yaml` targets a local **Qwen** vLLM server
-(model id `qwen3.6-27b`) exposed at `http://localhost:8080/v1`. Adjust
-`base_url`/`target_model` for your own setup. Qwen3 is a *reasoning* model, so
-`max_tokens` is set generously to leave budget for the thinking trace plus the
-answer; the agent reads only the final `content`, not the reasoning.
+預設的 `configs/hotpotqa/default.yaml` 對接的是本機 **Qwen** vLLM 服務
+(模型 id 為 `qwen3.6-27b`),透過 `http://localhost:8080/v1` 存取。請依你的環境
+調整 `base_url`/`target_model`。Qwen3 是**推理(reasoning)模型**,因此
+`max_tokens` 設得較寬鬆,以保留思考過程與最終答案所需的 token;agent 只讀取
+最終的 `content`,不會讀思考內容。
 
-## Setup
+## 安裝
 
 ```bash
 cd skillopt-qa
 uv venv
 uv pip install -e ".[dev]"
-cp .env.example .env        # set OPENAI_API_KEY (any value for most local servers)
+cp .env.example .env        # 設定 OPENAI_API_KEY(多數本機服務任意值即可)
 ```
 
-Confirm your server and the model id it reports:
+確認你的服務以及它回報的模型 id:
 
 ```bash
 curl http://localhost:8080/v1/models
 ```
 
-Set `model.target_model` / `model.optimizer_model` in
-`configs/hotpotqa/default.yaml` to **exactly** that id.
+把 `configs/hotpotqa/default.yaml` 裡的 `model.target_model` /
+`model.optimizer_model` 設成**完全一致**的 id。
 
-## 1. Download the dataset
+## 1. 下載資料集
 
 ```bash
 uv run skillopt-download --out data/hotpotqa --n-train 64 --n-val 64 --n-test 200
 ```
 
-Downloads HotpotQA from HuggingFace and writes:
+會從 HuggingFace 下載 HotpotQA,並寫出:
 
 ```
 data/hotpotqa/
@@ -81,11 +78,11 @@ data/hotpotqa/
 └── test/items.json
 ```
 
-Each item: `{"id", "question", "context", "answers": [...]}`. Train/val come from
-HotpotQA `train`; test comes from `validation` (its answers are public), so the
-test set stays unseen during optimization.
+每筆資料格式:`{"id", "question", "context", "answers": [...]}`。train/val 取自
+HotpotQA 的 `train` 切分;test 取自 `validation`(其答案為公開),因此 test 集在
+優化過程中始終未被看過。
 
-## 2. Train the skill
+## 2. 訓練技能
 
 ```bash
 uv run skillopt-train \
@@ -94,45 +91,45 @@ uv run skillopt-train \
     --out-root outputs
 ```
 
-Useful overrides: `--target-model`, `--base-url`, `--num-epochs`, `--batch-size`,
-`--val-size`, `--workers`, `--metric {em,f1}`, `--no-test`.
+常用覆寫參數:`--target-model`、`--base-url`、`--num-epochs`、`--batch-size`、
+`--val-size`、`--workers`、`--metric {em,f1}`、`--no-test`。
 
-Outputs land in `outputs/<run_name>/`:
+產出會放在 `outputs/<run_name>/`:
 
 ```
 outputs/<run_name>/
-├── best_skill.md          # the deployable artifact
-├── history.json           # per-step train/val metrics + accept/reject
+├── best_skill.md          # 可部署的產物
+├── history.json           # 每步的 train/val 指標與接受/拒絕紀錄
 ├── skills/skill_vXXXX_*.md
 ├── steps/step_XXXX.json
-└── test_result.json       # final EM / F1 on the held-out test set
+└── test_result.json       # 在保留 test 集上的最終 EM / F1
 ```
 
-## 3. Deploy
+## 3. 部署
 
-`best_skill.md` is just text. Prepend it to any QA agent's system prompt (see
-`skillopt/agent.py` `BASE_INSTRUCTIONS`) — including against a different model.
+`best_skill.md` 就只是一段文字。把它接到任何 QA agent 的 system prompt 前面即可
+(見 `skillopt/agent.py` 的 `BASE_INSTRUCTIONS`)——甚至可以套到別的模型上。
 
-## Project layout
+## 專案結構
 
-| Path | Role |
+| 路徑 | 角色 |
 |------|------|
-| `skillopt/config.py` | YAML config + CLI overrides |
-| `skillopt/llm.py` | OpenAI-compatible chat client |
-| `skillopt/data.py` | HotpotQA download & split building |
-| `skillopt/agent.py` | frozen QA agent + parallel rollouts |
-| `skillopt/evaluator.py` | EM / token-F1 scoring |
-| `skillopt/optimizer.py` | the text-space skill optimizer |
-| `skillopt/trainer.py` | epoch/batch loop + validation gate |
-| `scripts/` | `download_data.py`, `train.py` CLIs |
-| `tests/` | unit + offline end-to-end tests (no network) |
+| `skillopt/config.py` | YAML 設定 + CLI 覆寫 |
+| `skillopt/llm.py` | OpenAI 相容的 chat 客戶端 |
+| `skillopt/data.py` | HotpotQA 下載與切分建立 |
+| `skillopt/agent.py` | 凍結的 QA agent + 平行 rollout |
+| `skillopt/evaluator.py` | EM / token-F1 評分 |
+| `skillopt/optimizer.py` | 文字空間技能優化器 |
+| `skillopt/trainer.py` | epoch/batch 迴圈 + 驗證閘門 |
+| `scripts/` | `download_data.py`、`train.py` 兩支 CLI |
+| `tests/` | 單元測試 + 離線 e2e 測試(完全不需網路) |
 
-## Tests
+## 測試
 
 ```bash
-uv run pytest            # all tests run offline with a fake LLM
+uv run pytest            # 所有測試以 fake LLM 離線執行
 ```
 
-## License
+## 授權
 
 MIT
