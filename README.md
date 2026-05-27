@@ -39,9 +39,14 @@ successes and failures), *bounded textual updates* (small targeted edits),
 ## Requirements
 
 - Python ≥ 3.10, [`uv`](https://docs.astral.sh/uv/)
-- An **OpenAI-compatible** chat endpoint. This project assumes a local **Qwen**
-  server (e.g. vLLM or Ollama) already running at `http://localhost:8000/v1`.
-  Nothing GPU-specific is installed by this repo — point it at any endpoint.
+- An **OpenAI-compatible** chat endpoint. Nothing GPU-specific is installed by
+  this repo — point `model.base_url` at any endpoint.
+
+The shipped `configs/hotpotqa/default.yaml` targets a local **Qwen** vLLM server
+(model id `qwen3.6-27b`) exposed at `http://localhost:8080/v1`. Adjust
+`base_url`/`target_model` for your own setup. Qwen3 is a *reasoning* model, so
+`max_tokens` is set generously to leave budget for the thinking trace plus the
+answer; the agent reads only the final `content`, not the reasoning.
 
 ## Setup
 
@@ -55,7 +60,7 @@ cp .env.example .env        # set OPENAI_API_KEY (any value for most local serve
 Confirm your server and the model id it reports:
 
 ```bash
-curl http://localhost:8000/v1/models
+curl http://localhost:8080/v1/models
 ```
 
 Set `model.target_model` / `model.optimizer_model` in

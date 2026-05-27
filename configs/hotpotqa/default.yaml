@@ -3,14 +3,14 @@ metric: f1            # validation gate metric: "f1" or "em"
 seed_skill: ""       # empty -> use the built-in generic seed skill
 
 model:
-  base_url: "http://localhost:8000/v1"   # your local Qwen OpenAI-compatible endpoint
+  base_url: "http://localhost:8080/v1"   # local vLLM (docker-proxy maps host 8080 -> container 8000)
   api_key_env: "OPENAI_API_KEY"          # value is ignored by most local servers
-  target_model: "Qwen/Qwen2.5-7B-Instruct"     # MUST match the id your server reports
-  optimizer_model: "Qwen/Qwen2.5-7B-Instruct"
+  target_model: "qwen3.6-27b"     # served-model-name reported by the local vLLM server
+  optimizer_model: "qwen3.6-27b"
   temperature: 0.0          # agent answers deterministically
   optimizer_temperature: 0.7
-  max_tokens: 512
-  optimizer_max_tokens: 2048
+  max_tokens: 2048          # reasoning model: budget must cover thinking + answer
+  optimizer_max_tokens: 4096   # reasoning model: thinking + revised skill
   timeout: 120.0
   max_retries: 4
 
